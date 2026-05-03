@@ -753,7 +753,7 @@ def fetch_events(proxies):
 
     if RAW_QUERY:
         demisto.debug(f"fetch_events - search events using raw_query configured param:\n{RAW_QUERY}")
-        response = execute_raw_query(es, raw_query=RAW_QUERY, index=FETCH_INDEX)
+        response = execute_raw_query(es, raw_query=RAW_QUERY, index=FETCH_INDEX, size=FETCH_SIZE)
     else:
         query = QueryString(query="(" + FETCH_QUERY + ") AND " + TIME_FIELD + ":*")
         demisto.debug(
@@ -832,7 +832,7 @@ def get_events(proxies, is_test=False):
 
     if raw_query:
         demisto.debug(f"get_events - search events using raw_query:\n{raw_query}")
-        response = execute_raw_query(es, raw_query=raw_query, index=fetch_index)
+        response = execute_raw_query(es, raw_query=raw_query, index=fetch_index, size=fetch_size)
     elif fetch_query:
         query = QueryString(query="(" + fetch_query + ") AND " + fetch_time_field + ":*")
         demisto.debug(f"get_events - search events using fetch_query and fetch_time_field param:\n{query}")
