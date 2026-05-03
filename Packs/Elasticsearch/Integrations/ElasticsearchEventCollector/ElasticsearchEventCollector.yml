@@ -11,7 +11,7 @@ configuration:
   display: Server URL
   required: true
   type: 0
-  additionalinfo: The Elasticsearch server to which the integration connects. Ensure that the URL includes the correct Elasticsearch port. The default port for Elasticsearch v7 and below is 9200. [...]
+  additionalinfo: The Elasticsearch server to which the integration connects. Ensure that the URL includes the correct Elasticsearch port. The default port for Elasticsearch v7 and below is 9200. Use the Server URL for on-premises deployments.
   section: Connect
 - name: auth_type
   display: Authorization type
@@ -55,7 +55,7 @@ configuration:
   required: false
 - name: client_type
   defaultvalue: Elasticsearch
-  additionalinfo: In some hosted ElasticSearch environments, the standard ElasticSearch client is not supported. If you encounter any related client issues, please consider using the OpenSearch cl[...]
+  additionalinfo: In some hosted ElasticSearch environments, the standard ElasticSearch client is not supported. If you encounter any related client issues, please consider using the OpenSearch client type.
   display: Client type
   options:
   - Elasticsearch
