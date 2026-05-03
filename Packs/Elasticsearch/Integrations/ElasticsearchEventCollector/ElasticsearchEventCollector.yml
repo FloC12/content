@@ -11,7 +11,7 @@ configuration:
   display: Server URL
   required: true
   type: 0
-  additionalinfo: The Elasticsearch server to which the integration connects. Ensure that the URL includes the correct Elasticsearch port. The default port for Elasticsearch v7 and below is 9200. Use the Server URL for on-premises deployments.
+  additionalinfo: The Elasticsearch server to which the integration connects. Ensure that the URL includes the correct Elasticsearch port. The default port for Elasticsearch v7 and below is 9200. [...]
   section: Connect
 - name: auth_type
   display: Authorization type
@@ -55,7 +55,7 @@ configuration:
   required: false
 - name: client_type
   defaultvalue: Elasticsearch
-  additionalinfo: In some hosted ElasticSearch environments, the standard ElasticSearch client is not supported. If you encounter any related client issues, please consider using the OpenSearch client type.
+  additionalinfo: In some hosted ElasticSearch environments, the standard ElasticSearch client is not supported. If you encounter any related client issues, please consider using the OpenSearch cl[...]
   display: Client type
   options:
   - Elasticsearch
@@ -105,10 +105,15 @@ configuration:
   - Simple-Date
   - Timestamp-Seconds
   - Timestamp-Milliseconds
+  - ISO-8601-TZ
   section: Collect
   advanced: true
   required: false
-  additionalinfo: For more information see the explanation in the help section.
+  additionalinfo: |-
+    Simple-Date: Date format as "yyyy-MM-dd HH:mm:ss.SSSSSS".
+    Timestamp-Seconds: Unix timestamp in seconds.
+    Timestamp-Milliseconds: Unix timestamp in milliseconds.
+    ISO-8601-TZ: ISO 8601 format with timezone indicator (e.g., "2026-04-23T22:46:38Z").
 - name: map_labels
   defaultvalue: 'true'
   display: Map JSON fields into labels
@@ -153,8 +158,13 @@ script:
       - Simple-Date
       - Timestamp-Seconds
       - Timestamp-Milliseconds
+      - ISO-8601-TZ
       required: true
-      description: For more information see the explanation in the help section.
+      description: |-
+        Simple-Date: Date format as "yyyy-MM-dd HH:mm:ss.SSSSSS".
+        Timestamp-Seconds: Unix timestamp in seconds.
+        Timestamp-Milliseconds: Unix timestamp in milliseconds.
+        ISO-8601-TZ: ISO 8601 format with timezone indicator (e.g., "2026-04-23T22:46:38Z").
     - name: fetch_size
       defaultValue: '10'
       description: The maximum number of results per fetch.
