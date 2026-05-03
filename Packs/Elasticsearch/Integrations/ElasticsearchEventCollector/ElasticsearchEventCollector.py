@@ -70,6 +70,8 @@ else:  # Elasticsearch (<= v7)
 
 ES_DEFAULT_DATETIME_FORMAT = "yyyy-MM-dd HH:mm:ss.SSSSSS"
 PYTHON_DEFAULT_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
+ISO_8601_TZ_FORMAT = "strict_date_time"
+PYTHON_ISO_8601_TZ_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 SERVER = PARAMS.get("url", "").rstrip("/")
 
 TIME_FIELD = PARAMS.get("fetch_time_field", "")
@@ -113,7 +115,7 @@ def convert_date_to_timestamp(date, time_method):
 
     Args:
         date(datetime): A datetime object setting up the last fetch time
-        time_method (str): The method of timestamp conversion (e.g., 'Simple-Date', 'Timestamp-Seconds', 'Timestamp-Milliseconds')
+        time_method (str): The method of timestamp conversion (e.g., 'Simple-Date', 'Timestamp-Seconds', 'Timestamp-Milliseconds', 'ISO-8601-TZ')
 
     Returns:
         (num | str): The formatted timestamp
@@ -129,27 +131,45 @@ def convert_date_to_timestamp(date, time_method):
     if time_method == "Timestamp-Milliseconds":
         return int(date.timestamp() * 1000)
 
+    if time_method == "ISO-8601-TZ":
+        return datetime.strftime(date, PYTHON_ISO_8601_TZ_FORMAT)
+
     # In case of 'Simple-Date'.
     return datetime.strftime(date, PYTHON_DEFAULT_DATETIME_FORMAT)
 
 
-def timestamp_to_date(timestamp_string):
+def timestamp_to_date(timestamp_string, time_method=None):
     """Converts a timestamp string to a datetime object.
 
     Args:
         timestamp_string(string): A string with a timestamp in it.
+        time_method(string): The method of timestamp conversion. If None, uses global TIME_METHOD.
 
     Returns:
         (datetime).represented by the timestamp in the format '%Y-%m-%d %H:%M:%S.%f'
     """
+    if time_method is None:
+        time_method = TIME_METHOD
+
     timestamp_number: float
+    
+    # ISO-8601-TZ format: 2026-04-23T22:46:38Z
+    if time_method == "ISO-8601-TZ":
+        demisto.debug(f"timestamp_to_date - Parsing ISO-8601-TZ format: {timestamp_string}")
+        try:
+            return datetime.strptime(timestamp_string, PYTHON_ISO_8601_TZ_FORMAT).replace(tzinfo=None)
+        except ValueError as e:
+            demisto.debug(f"timestamp_to_date - Failed to parse ISO-8601-TZ format: {e}")
+            # Fallback to dateutil parser for flexible ISO format handling
+            return parse(timestamp_string).replace(tzinfo=None)
+    
     # find timestamp in form of more than seconds since epoch: 1572164838000
-    if TIME_METHOD == "Timestamp-Milliseconds":
+    elif time_method == "Timestamp-Milliseconds":
         timestamp_number = float(int(timestamp_string) / 1000)
 
     # find timestamp in form of seconds since epoch: 1572164838
-    else:  # TIME_METHOD == 'Timestamp-Seconds':
-        demisto.debug(f"{TIME_METHOD=}. Should be Timestamp-Seconds.")
+    else:  # time_method == 'Timestamp-Seconds' or 'Simple-Date'
+        demisto.debug(f"timestamp_to_date - {time_method=}. Parsing as numeric timestamp.")
         timestamp_number = float(timestamp_string)
 
     # convert timestamp (a floating point number representing time since epoch) to datetime
@@ -535,7 +555,7 @@ def results_to_events_timestamp(response, last_fetch, seen_event_ids=None):
 
             if time_field_value is not None:
                 # if timestamp convert to iso format date and save the timestamp
-                hit_date = timestamp_to_date(str(time_field_value))
+                hit_date = timestamp_to_date(str(time_field_value), TIME_METHOD)
                 hit_timestamp = int(time_field_value)
                 hit_id = hit.get("_id")
 
@@ -674,7 +694,7 @@ def get_time_range(
         time_range_start (str): start of time range
         time_range_end (str): end of time range
         time_field (str): The field on which the filter the results
-        time_method (str): The method of timestamp conversion (e.g., 'Simple-Date', 'Timestamp-Seconds', 'Timestamp-Milliseconds')
+        time_method (str): The method of timestamp conversion (e.g., 'Simple-Date', 'Timestamp-Seconds', 'Timestamp-Milliseconds', 'ISO-8601-TZ')
 
     Returns:
         dictionary (Ex. {"range":{'gte': 1000 'lt': 1001}})
@@ -698,6 +718,9 @@ def get_time_range(
 
     if time_method == "Simple-Date":
         range_dict["format"] = ES_DEFAULT_DATETIME_FORMAT
+
+    elif time_method == "ISO-8601-TZ":
+        range_dict["format"] = ISO_8601_TZ_FORMAT
 
     if utc_offset := re.search(r"([+-]\d{2}:\d{2})$", time_range_start):
         range_dict["time_zone"] = utc_offset.group(1)
