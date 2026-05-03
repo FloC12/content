@@ -84,8 +84,27 @@ INSECURE = not PARAMS.get("insecure", False)
 TIME_METHOD = PARAMS.get("time_method", "Simple-Date")
 TIMEOUT = int(PARAMS.get("timeout") or 60)
 MAP_LABELS = PARAMS.get("map_labels", True)
+FETCH_FIELDS = PARAMS.get("fetch_fields", "")
 
 FETCH_QUERY = RAW_QUERY or FETCH_QUERY_PARM
+
+
+def parse_fields(fields_string):
+    """Parse comma-separated fields string into a list.
+    
+    Args:
+        fields_string (str): Comma-separated field names (e.g., "field1,field2,nested.field3")
+    
+    Returns:
+        list: List of field names, or empty list if fields_string is empty
+    """
+    if not fields_string or not isinstance(fields_string, str):
+        return []
+    
+    # Split by comma and strip whitespace from each field
+    fields = [field.strip() for field in fields_string.split(",") if field.strip()]
+    demisto.debug(f"Parsed fields: {fields}")
+    return fields
 
 
 def get_value_by_dot_notation(dictionary, key):
@@ -549,7 +568,7 @@ def results_to_events_timestamp(response, last_fetch, seen_event_ids=None):
     events = []
 
     for hit in response.get("hits", {}).get("hits"):
-        source = hit.get("_source")
+        source = hit.get("_source") or hit.get("fields", {})
         if source is not None:
             time_field_value = get_value_by_dot_notation(source, str(TIME_FIELD))
 
@@ -576,7 +595,7 @@ def results_to_events_timestamp(response, last_fetch, seen_event_ids=None):
                         inc["dbotMirrorId"] = hit_id
 
                     if MAP_LABELS:
-                        inc["labels"] = event_label_maker(hit.get("_source"))
+                        inc["labels"] = event_label_maker(source)
 
                     inc["_time"] = hit_date.isoformat() + "Z"
 
@@ -609,7 +628,7 @@ def results_to_events_datetime(response, last_fetch, seen_event_ids=None):
     demisto.debug(f"results_to_events_datetime - total hits to scan: {len(hits)}")
 
     for hit in hits:
-        source = hit.get("_source")
+        source = hit.get("_source") or hit.get("fields", {})
         if source is not None:
             time_field_value = get_value_by_dot_notation(source, str(TIME_FIELD))
             if time_field_value is not None:
@@ -638,7 +657,7 @@ def results_to_events_datetime(response, last_fetch, seen_event_ids=None):
                         inc["dbotMirrorId"] = hit_id
 
                     if MAP_LABELS:
-                        inc["labels"] = event_label_maker(hit.get("_source"))
+                        inc["labels"] = event_label_maker(source)
 
                     inc["_time"] = format_to_iso(hit_date.isoformat())
 
@@ -745,7 +764,20 @@ def query_string_to_dict(raw_query) -> Dict:
     return body
 
 
-def execute_raw_query(es, raw_query, index, size=None, page=None):
+def execute_raw_query(es, raw_query, index, size=None, page=None, fields=None):
+    """Execute a raw Elasticsearch DSL query with optional fields parameter.
+    
+    Args:
+        es: Elasticsearch client
+        raw_query: Raw DSL query string or dict
+        index: Index name to search
+        size: Number of results to return
+        page: Pagination offset
+        fields: List of fields to retrieve (uses Elasticsearch fields parameter)
+    
+    Returns:
+        dict: Elasticsearch response
+    """
     body = query_string_to_dict(raw_query)
 
     # update parameters if given
@@ -753,6 +785,11 @@ def execute_raw_query(es, raw_query, index, size=None, page=None):
         body["size"] = size
     if isinstance(page, int):
         body["from"] = page
+    
+    # Add fields parameter if specified
+    if fields and isinstance(fields, list) and len(fields) > 0:
+        demisto.debug(f"execute_raw_query - Adding fields parameter: {fields}")
+        body["fields"] = fields
 
     search = Search(using=es, index=index).update_from_dict(body)
 
@@ -776,7 +813,8 @@ def fetch_events(proxies):
 
     if RAW_QUERY:
         demisto.debug(f"fetch_events - search events using raw_query configured param:\n{RAW_QUERY}")
-        response = execute_raw_query(es, raw_query=RAW_QUERY, index=FETCH_INDEX, size=FETCH_SIZE)
+        fields = parse_fields(FETCH_FIELDS)
+        response = execute_raw_query(es, raw_query=RAW_QUERY, index=FETCH_INDEX, size=FETCH_SIZE, fields=fields)
     else:
         query = QueryString(query="(" + FETCH_QUERY + ") AND " + TIME_FIELD + ":*")
         demisto.debug(
@@ -785,6 +823,13 @@ def fetch_events(proxies):
         # Elastic search can use epoch timestamps (in milliseconds) as date representation regardless of date format.
         search = Search(using=es, index=FETCH_INDEX).filter(time_range_dict)
         search = search.sort({TIME_FIELD: {"order": "asc"}})[0:FETCH_SIZE].query(query)
+        
+        # Add fields parameter if specified
+        fields = parse_fields(FETCH_FIELDS)
+        if fields and len(fields) > 0:
+            demisto.debug(f"fetch_events - Adding fields parameter: {fields}")
+            for field in fields:
+                search = search.source([field])
 
         if ELASTIC_SEARCH_CLIENT in [ELASTICSEARCH_V9, ELASTICSEARCH_V8, OPEN_SEARCH]:
             response = search.execute().to_dict()
@@ -833,6 +878,7 @@ def get_events(proxies, is_test=False):
         time_method = "Simple-Date"
         start_time = "1 days"
         end_time = "now"
+        fetch_fields = ""
     else:
         args = demisto.args()
         raw_query = args.get("raw_query", "")
@@ -843,6 +889,7 @@ def get_events(proxies, is_test=False):
         time_method = args.get("time_method", "Simple-Date")
         start_time = args.get("start_time", "")
         end_time = args.get("end_time")
+        fetch_fields = args.get("fetch_fields", "")
 
     if raw_query and fetch_query:
         demisto.debug("get_events - Only one of raw_query or fetch_query should be provided.")
@@ -855,13 +902,21 @@ def get_events(proxies, is_test=False):
 
     if raw_query:
         demisto.debug(f"get_events - search events using raw_query:\n{raw_query}")
-        response = execute_raw_query(es, raw_query=raw_query, index=fetch_index, size=fetch_size)
+        fields = parse_fields(fetch_fields)
+        response = execute_raw_query(es, raw_query=raw_query, index=fetch_index, size=fetch_size, fields=fields)
     elif fetch_query:
         query = QueryString(query="(" + fetch_query + ") AND " + fetch_time_field + ":*")
         demisto.debug(f"get_events - search events using fetch_query and fetch_time_field param:\n{query}")
         # Elastic search can use epoch timestamps (in milliseconds) as date representation regardless of date format.
         search = Search(using=es, index=fetch_index).filter(time_range_dict)
         search = search.sort({fetch_time_field: {"order": "asc"}})[0:fetch_size].query(query)
+        
+        # Add fields parameter if specified
+        fields = parse_fields(fetch_fields)
+        if fields and len(fields) > 0:
+            demisto.debug(f"get_events - Adding fields parameter: {fields}")
+            for field in fields:
+                search = search.source([field])
 
         if ELASTIC_SEARCH_CLIENT in [ELASTICSEARCH_V9, ELASTICSEARCH_V8, OPEN_SEARCH]:
             response = search.execute().to_dict()
