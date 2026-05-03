@@ -11,7 +11,7 @@ configuration:
   display: Server URL
   required: true
   type: 0
-  additionalinfo: The Elasticsearch server to which the integration connects. Ensure that the URL includes the correct Elasticsearch port. The default port for Elasticsearch v7 and below is 9200. Use the Server URL for on-premises deployments.
+  additionalinfo: The Elasticsearch server to which the integration connects. Ensure that the URL includes the correct Elasticsearch port. The default port for Elasticsearch v7 and below is 9200. [...]
   section: Connect
 - name: auth_type
   display: Authorization type
@@ -55,7 +55,7 @@ configuration:
   required: false
 - name: client_type
   defaultvalue: Elasticsearch
-  additionalinfo: In some hosted ElasticSearch environments, the standard ElasticSearch client is not supported. If you encounter any related client issues, please consider using the OpenSearch client type.
+  additionalinfo: In some hosted ElasticSearch environments, the standard ElasticSearch client is not supported. If you encounter any related client issues, please consider using the OpenSearch cl[...]
   display: Client type
   options:
   - Elasticsearch
@@ -114,6 +114,17 @@ configuration:
     Timestamp-Seconds: Unix timestamp in seconds.
     Timestamp-Milliseconds: Unix timestamp in milliseconds.
     ISO-8601-TZ: ISO 8601 format with timezone indicator (e.g., "2026-04-23T22:46:38Z").
+- name: fetch_fields
+  display: Fields to retrieve from index
+  type: 0
+  section: Collect
+  advanced: true
+  required: false
+  additionalinfo: |-
+    Comma-separated list of fields to retrieve from Elasticsearch documents.
+    Uses the Elasticsearch fields parameter for optimized retrieval.
+    Example: "field1,field2,nested.field3".
+    Leave empty to retrieve all fields (_source).
 - name: map_labels
   defaultvalue: 'true'
   display: Map JSON fields into labels
@@ -177,6 +188,13 @@ script:
       description: The time field used for sorting and limiting results. If using a nested field, separate field names with dot notation.
     - name: fetch_query
       description: Query string uses the Lucene syntax.
+      required: false
+    - name: fetch_fields
+      description: |-
+        Comma-separated list of fields to retrieve from Elasticsearch documents.
+        Uses the Elasticsearch fields parameter for optimized retrieval.
+        Example: "field1,field2,nested.field3".
+        Leave empty to retrieve all fields (_source).
       required: false
     - name: raw_query
       type: 12
